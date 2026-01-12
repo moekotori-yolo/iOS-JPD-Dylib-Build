@@ -11,17 +11,21 @@ jobs:
 
       - name: Compile Dylib
         run: |
+          # 1. 确保文件名匹配！这里假设你上传的文件叫 ForceSwitch.m
+          # 2. 必须添加 -framework UIKit，因为悬浮窗需要它
+          
           xcrun -sdk iphoneos clang -dynamiclib -arch arm64 \
           -framework Foundation -framework WebKit -framework UIKit \
-          -o ForceUserSelect.dylib \
-          ForceUserSelect.m \
+          -fobjc-arc \
+          -o ForceSwitch.dylib \
+          ForceSwitch.m \
           -Wno-objc-method-access
 
-          # 简单的签名，防止注入工具报错
-          codesign -f -s - ForceUserSelect.dylib
+          # 3. 简单的伪签名
+          codesign -f -s - ForceSwitch.dylib
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ForceUserSelect-Dylib
-          path: ForceUserSelect.dylib
+          name: ForceSwitch-Dylib
+          path: ForceSwitch.dylib
