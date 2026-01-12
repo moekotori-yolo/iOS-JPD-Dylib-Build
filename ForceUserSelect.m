@@ -1,8 +1,9 @@
 // ForceUserSelect.m
-// 适用于非越狱环境注入
+// 编译目标: iOS Dynamic Library (.dylib)
 
 #import <Foundation/Foundation.h>
 #import <WebKit/WebKit.h>
+#import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
 @implementation WKWebView (ForceUserSelect)
@@ -10,93 +11,66 @@
 + (void)load {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        NSLog(@"[ForceUserSelect] === Dylib Loaded ===");
+        NSLog(@"[ForceUserSelect] 插件已加载 - 针对 custom.css 优化版");
         
-        // 1. Hook 代码初始化方法 (initWithFrame:configuration:)
+        // Hook 两种常用的初始化方法
         [self swizzleSelector:@selector(initWithFrame:configuration:) 
                  withSelector:@selector(fus_initWithFrame:configuration:)];
-        
-        // 2. Hook Storyboard/XIB 初始化方法 (initWithCoder:)
-        // 很多 App 界面是拖出来的，必须 Hook 这个，否则无效！
         [self swizzleSelector:@selector(initWithCoder:) 
                  withSelector:@selector(fus_initWithCoder:)];
     });
 }
 
-// 通用 Swizzle 工具方法
-+ (void)swizzleSelector:(SEL)originalSelector withSelector:(SEL)swizzledSelector {
-    Class class = [self class];
-    Method originalMethod = class_getInstanceMethod(class, originalSelector);
-    Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
-
-    BOOL didAddMethod = class_addMethod(class,
-                                        originalSelector,
-                                        method_getImplementation(swizzledMethod),
-                                        method_getTypeEncoding(swizzledMethod));
-
-    if (didAddMethod) {
-        class_replaceMethod(class,
-                            swizzledSelector,
-                            method_getImplementation(originalMethod),
-                            method_getTypeEncoding(originalMethod));
++ (void)swizzleSelector:(SEL)orig withSelector:(SEL)swiz {
+    Class cls = [self class];
+    Method mOrig = class_getInstanceMethod(cls, orig);
+    Method mSwiz = class_getInstanceMethod(cls, swiz);
+    if (class_addMethod(cls, orig, method_getImplementation(mSwiz), method_getTypeEncoding(mSwiz))) {
+        class_replaceMethod(cls, swiz, method_getImplementation(mOrig), method_getTypeEncoding(mOrig));
     } else {
-        method_exchangeImplementations(originalMethod, swizzledMethod);
+        method_exchangeImplementations(mOrig, mSwiz);
     }
 }
 
-// --- 你的 Flex 3 逻辑实现 ---
+// --- 注入逻辑 ---
 
-- (void)applyFlexLogic {
-    // 这里的 self 就是 webView 实例
-    NSLog(@"[ForceUserSelect] Applying logic to WebView: %@", self);
+- (void)injectAntiBlockerScript {
+    if (!self.configuration.userContentController) return;
 
-    @try {
-        // 1. 启用用户选择功能 (对应 Flex: [self setValue:@YES forKey:@"_userSelectEnabled"])
-        [self setValue:@YES forKey:@"_userSelectEnabled"];
-        
-        // 2. 启用 Preferences 设置 (对应 Flex: [self.preferences setValue...])
-        // 注意：WKWebView 本身没有 preferences 属性，通常在 configuration 里
-        if (self.configuration && self.configuration.preferences) {
-            [self.configuration.preferences setValue:@YES forKey:@"_userSelectEnabled"];
-        }
-        
-        // 3. 创建 CSS 注入脚本 (你的原始 CSS)
-        NSString *cssInjection = @"var style = document.createElement('style'); style.innerHTML = 'html, body, * { -webkit-user-select: text !important; -khtml-user-select: text !important; -moz-user-select: text !important; -o-user-select: text !important; user-select: text !important; cursor: text !important; }'; document.head.appendChild(style);";
-        
-        // 4. 创建并添加用户脚本
-        WKUserScript *userScript = [[WKUserScript alloc] initWithSource:cssInjection 
-                                                          injectionTime:WKUserScriptInjectionTimeAtDocumentStart 
-                                                       forMainFrameOnly:NO]; // 建议改为 NO 以支持 iframe，Flex代码里是YES
-        
-        if (self.configuration && self.configuration.userContentController) {
-            [self.configuration.userContentController addUserScript:userScript];
-            NSLog(@"[ForceUserSelect] CSS Script Injected Successfully");
-        }
-        
-    } @catch (NSException *exception) {
-        NSLog(@"[ForceUserSelect] Error: %@", exception);
-    }
+    // 针对你发现的 custom.css，我们使用 !important 覆盖它
+    // 并添加 setInterval 暴力守护，防止它被后续加载的 CSS 覆盖
+    NSString *jsSource = 
+    @"var css = 'html, body, * { -webkit-user-select: text !important; user-select: text !important; -webkit-touch-callout: default !important; }';"
+    @"var style = document.createElement('style');"
+    @"style.innerHTML = css;"
+    @"document.head.appendChild(style);"
+    
+    // 定时器守护 (每500毫秒强制改一次，专门对付顽固的 css 文件)
+    @"setInterval(function() {"
+    @"  document.documentElement.style.webkitUserSelect = 'text';"
+    @"  document.documentElement.style.userSelect = 'text';"
+    @"  document.body.style.webkitUserSelect = 'text';"
+    @"}, 500);";
+
+    WKUserScript *script = [[WKUserScript alloc] initWithSource:jsSource
+                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentEnd // 改为 End，确保在 custom.css 加载后执行
+                                               forMainFrameOnly:NO];
+    
+    [self.configuration.userContentController addUserScript:script];
+    NSLog(@"[ForceUserSelect] 注入脚本成功 (Targeting custom.css)");
 }
 
 // --- Swizzled Methods ---
 
 - (instancetype)fus_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
-    // 调用原始方法 (相当于 ORIG())
     WKWebView *webView = [self fus_initWithFrame:frame configuration:configuration];
-    
-    // 执行你的逻辑
-    [webView applyFlexLogic];
-    
+    [webView injectAntiBlockerScript];
     return webView;
 }
 
 - (instancetype)fus_initWithCoder:(NSCoder *)coder {
-    // 调用原始方法 (相当于 ORIG())
     WKWebView *webView = [self fus_initWithCoder:coder];
-    
-    // 执行你的逻辑
-    [webView applyFlexLogic];
-    
+    [webView injectAntiBlockerScript];
     return webView;
 }
 
