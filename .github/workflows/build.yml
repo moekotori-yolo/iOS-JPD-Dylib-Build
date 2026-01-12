@@ -11,14 +11,13 @@ jobs:
 
       - name: Compile Dylib
         run: |
-          # 1. 编译
           xcrun -sdk iphoneos clang -dynamiclib -arch arm64 \
           -framework Foundation -framework WebKit -framework UIKit \
           -o ForceUserSelect.dylib \
-          ForceUserSelect.m
-          
-          # 2. 伪签名 (Ad-Hoc Signing) - 这步很重要！
-          # 哪怕没有证书，也要执行这个命令，告诉系统"它是被允许的"
+          ForceUserSelect.m \
+          -Wno-objc-method-access
+
+          # 简单的签名，防止注入工具报错
           codesign -f -s - ForceUserSelect.dylib
 
       - name: Upload Artifact
