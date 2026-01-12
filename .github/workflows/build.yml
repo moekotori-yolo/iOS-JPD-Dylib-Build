@@ -1,0 +1,24 @@
+name: Build iOS Dylib
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Compile Dylib
+        run: |
+          # 使用 xcrun 调用 iOS SDK 进行编译
+          xcrun -sdk iphoneos clang -dynamiclib -arch arm64 \
+          -framework Foundation -framework WebKit \
+          -o ForceUserSelect.dylib \
+          ForceUserSelect.m
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ForceUserSelect-Dylib
+          path: ForceUserSelect.dylib
