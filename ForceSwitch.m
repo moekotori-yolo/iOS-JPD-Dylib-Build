@@ -72,7 +72,7 @@ static UIButton *gFloatingButton = nil; // 悬浮按钮
         // 立即对当前 WebView 注入
         if (gCurrentWebView) {
             [gCurrentWebView injectForceCopyScript];
-            [self showToast:@"复制功能已开启"];
+            [self showToast:@"Neko:复制功能已开启"];
         }
     } else {
         // --- 关闭模式 ---
@@ -82,7 +82,7 @@ static UIButton *gFloatingButton = nil; // 悬浮按钮
         // 刷新网页以清除注入的代码 (通过校验的关键!)
         if (gCurrentWebView) {
             [gCurrentWebView reload];
-            [self showToast:@"已复原 (刷新网页)"];
+            [self showToast:@"Neko:复制功能已关闭"];
         }
     }
 }
