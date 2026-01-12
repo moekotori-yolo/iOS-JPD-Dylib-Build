@@ -11,17 +11,17 @@ jobs:
 
       - name: Compile Dylib
         run: |
-          # 1. 确保文件名匹配！这里假设你上传的文件叫 ForceSwitch.m
-          # 2. 必须添加 -framework UIKit，因为悬浮窗需要它
+          # 增加 -framework CoreGraphics 解决 CGPointZero 报错
+          # 增加 -Wno-deprecated-declarations 忽略过时警告(可选，但建议直接修复代码)
           
           xcrun -sdk iphoneos clang -dynamiclib -arch arm64 \
-          -framework Foundation -framework WebKit -framework UIKit \
+          -framework Foundation -framework WebKit -framework UIKit -framework CoreGraphics \
           -fobjc-arc \
           -o ForceSwitch.dylib \
           ForceSwitch.m \
           -Wno-objc-method-access
 
-          # 3. 简单的伪签名
+          # 伪签名
           codesign -f -s - ForceSwitch.dylib
 
       - name: Upload Artifact
